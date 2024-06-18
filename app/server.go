@@ -23,6 +23,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	var readarr []byte
+	ret, err := conn.Read(readarr)
+	fmt.Println(readarr)
+	fmt.Println(ret)
+
 	var resp string = "HTTP/1.1 200 OK\r\n\r\n"
 
 	conn.Write([]byte(resp))
