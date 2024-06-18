@@ -20,19 +20,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	defer l.Close()
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			continue
+		}
+		go router(conn)
 	}
+}
 
+func router(conn net.Conn) {
+	defer conn.Close()
 	var readArray = make([]byte, 1024) // to make preallocated array, use the "make" function
-	_, err = conn.Read(readArray)
+	_, err := conn.Read(readArray)
 	if err != nil {
 		fmt.Println("Failed to read request")
 		os.Exit(1)
 	}
-
 	urlPath, err := parseURLPath(string(readArray))
 	if err != nil {
 		fmt.Println(err.Error())
