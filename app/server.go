@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -9,7 +8,7 @@ import (
 	"strings"
 )
 
-const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n"
+const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 
 func main() {
@@ -39,20 +38,10 @@ func main() {
 		fmt.Println(err.Error())
 	}
 
-	/* // task 4, extract url path
 	if urlPath == "/" {
 		conn.Write([]byte(RESPONSE_200))
-	} else {
-		conn.Write([]byte(RESPONSE_404))
-	} */
-
-	if strings.HasPrefix(urlPath, "/echo/") {
-		response, err := handleEchoPath(urlPath)
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
-		conn.Write([]byte(response))
+	} else if strings.HasPrefix(urlPath, "/echo/") {
+		conn.Write([]byte(handleEchoPath(urlPath)))
 	} else {
 		conn.Write([]byte(RESPONSE_404))
 	}
@@ -73,12 +62,9 @@ func parseURLPath(requestString string) (string, error) {
 	return strings.Trim(requestParts[1], " \t\n\r"), nil
 }
 
-func handleEchoPath(urlPath string) (string, error) {
+func handleEchoPath(urlPath string) string {
 	var data string = strings.TrimPrefix(urlPath, "/echo/")
 	var size int = len(data)
 
-	var buffer bytes.Buffer
-	buffer.WriteString(RESPONSE_200)
-	buffer.WriteString(fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data))
-	return buffer.String(), nil
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
 }
