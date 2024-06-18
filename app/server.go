@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -23,13 +24,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	var readarr []byte
-	ret, err := conn.Read(readarr)
-	fmt.Println(readarr)
-	fmt.Println(ret)
+	var readarr = make([]byte, 1024) // to make preallocated array, use the "make" function
+	_, err = conn.Read(readarr)
+	if err != nil {
+		fmt.Println("Failed to read request")
+		os.Exit(1)
+	}
 
-	var resp string = "HTTP/1.1 200 OK\r\n\r\n"
+	var resp200 string = "HTTP/1.1 200 OK\r\n\r\n"
+	var resp404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 
-	conn.Write([]byte(resp))
+	if strings.HasPrefix(string(readarr), "GET / HTTP/1.1\r\n") {
+		conn.Write([]byte(resp200))
+	} else {
+		conn.Write([]byte(resp404))
+	}
 
 }
