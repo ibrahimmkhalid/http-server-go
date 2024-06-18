@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -12,8 +14,6 @@ const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 
 func main() {
-	fmt.Println("Logs from your program will appear here!")
-
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
@@ -42,6 +42,8 @@ func main() {
 		conn.Write([]byte(RESPONSE_200))
 	} else if strings.HasPrefix(urlPath, "/echo/") {
 		conn.Write([]byte(handleEchoPath(urlPath)))
+	} else if urlPath == "/user-agent" {
+		conn.Write([]byte(handleUserAgentPath(string(readArray))))
 	} else {
 		conn.Write([]byte(RESPONSE_404))
 	}
@@ -66,5 +68,17 @@ func handleEchoPath(urlPath string) string {
 	var data string = strings.TrimPrefix(urlPath, "/echo/")
 	var size int = len(data)
 
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
+}
+
+func handleUserAgentPath(requestString string) string {
+	var stringReader = strings.NewReader(requestString)
+	var bufReader = bufio.NewReader(stringReader)
+	req, err := http.ReadRequest(bufReader)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	var data string = req.UserAgent()
+	var size int = len(data)
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
 }
