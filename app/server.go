@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
+const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 
 func main() {
