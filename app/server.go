@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,7 +14,13 @@ import (
 const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 
+var filesPath string
+
 func main() {
+
+	flag.StringVar(&filesPath, "directory", "", "Path to /files/ serve endpoint")
+	flag.Parse()
+
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
@@ -50,6 +57,8 @@ func router(conn net.Conn) {
 		conn.Write([]byte(handleEchoPath(urlPath)))
 	} else if urlPath == "/user-agent" {
 		conn.Write([]byte(handleUserAgentPath(string(readArray))))
+	} else if strings.HasPrefix(urlPath, "/files/") {
+		conn.Write([]byte(handleFileServeEndpoint(urlPath)))
 	} else {
 		conn.Write([]byte(RESPONSE_404))
 	}
@@ -87,4 +96,35 @@ func handleUserAgentPath(requestString string) string {
 	var data string = req.UserAgent()
 	var size int = len(data)
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
+}
+
+func handleFileServeEndpoint(urlPath string) string {
+	if filesPath == "" {
+		fmt.Println("Root for /files/ endpoint not defined")
+		os.Exit(1)
+	}
+
+	var filename string = strings.TrimPrefix(urlPath, "/files/")
+	var filePath string = filesPath + filename
+	fd, err := os.Open(filePath)
+	if err != nil {
+		return RESPONSE_404
+	}
+	defer fd.Close()
+
+	var chunk []byte = make([]byte, 1024)
+
+	var n int
+	var size int
+	var data string
+	for {
+		n, err = fd.Read(chunk)
+		if err != nil {
+			break
+		}
+		size += n
+		data += string(chunk[:n])
+	}
+
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%s", size, data)
 }
