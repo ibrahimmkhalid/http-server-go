@@ -12,7 +12,9 @@ import (
 )
 
 const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
+const RESPONSE_201 string = "HTTP/1.1 201 Created\r\n\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
+const RESPONSE_500 string = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
 
 var filesPath string
 
@@ -58,7 +60,7 @@ func router(conn net.Conn) {
 	} else if urlPath == "/user-agent" {
 		conn.Write([]byte(handleUserAgentPath(string(readArray))))
 	} else if strings.HasPrefix(urlPath, "/files/") {
-		conn.Write([]byte(handleFileServeEndpoint(urlPath)))
+		conn.Write([]byte(handleFilesEndpoint(string(readArray), urlPath)))
 	} else {
 		conn.Write([]byte(RESPONSE_404))
 	}
@@ -98,12 +100,71 @@ func handleUserAgentPath(requestString string) string {
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
 }
 
-func handleFileServeEndpoint(urlPath string) string {
+func handleFilesEndpoint(requestString, urlPath string) string {
 	if filesPath == "" {
 		fmt.Println("Root for /files/ endpoint not defined")
 		os.Exit(1)
 	}
 
+	var isPost bool = strings.HasPrefix(requestString, "POST")
+	var isGet bool = strings.HasPrefix(requestString, "GET")
+
+	if isPost {
+		return handleFileUploadEndpoint(requestString, urlPath)
+	} else if isGet {
+		return handleFileServeEndpoint(urlPath)
+	} else {
+		return RESPONSE_404
+	}
+}
+
+func handleFileUploadEndpoint(requestString, urlPath string) string {
+	var stringReader = strings.NewReader(requestString)
+	var bufReader = bufio.NewReader(stringReader)
+	req, err := http.ReadRequest(bufReader)
+	if err != nil {
+		fmt.Println(err.Error())
+		return RESPONSE_500
+	}
+
+	body := req.Body
+	var chunk []byte = make([]byte, 1024)
+
+	var n int
+	var size int
+	var data string
+	for {
+		n, err = body.Read(chunk)
+		if err != nil && !strings.Contains(err.Error(), "EOF") {
+			break
+		}
+		size += n
+		data += string(chunk[:n])
+		if err != nil {
+			break
+		}
+	}
+
+	var filename string = strings.TrimPrefix(urlPath, "/files/")
+	var filePath string = filesPath + filename
+	fd, err := os.Create(filePath)
+	if err != nil {
+		fmt.Println(err.Error())
+		return RESPONSE_500
+	}
+	defer fd.Close()
+
+	n, err = fd.Write([]byte(data))
+	if err != nil {
+		fmt.Println(err.Error())
+		return RESPONSE_500
+	}
+
+	fd.Sync()
+	return RESPONSE_201
+}
+
+func handleFileServeEndpoint(urlPath string) string {
 	var filename string = strings.TrimPrefix(urlPath, "/files/")
 	var filePath string = filesPath + filename
 	fd, err := os.Open(filePath)
