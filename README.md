@@ -1,35 +1,30 @@
-[![progress-banner](https://backend.codecrafters.io/progress/http-server/4ad3baf0-bfde-4cbe-8b91-5d4f24b83c3f)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+## HTTP Server implementation in Go
 
-This is a starting point for Go solutions to the
+Based on the
 ["Build Your Own HTTP server" Challenge](https://app.codecrafters.io/courses/http-server/overview).
 
 [HTTP](https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol) is the
-protocol that powers the web. In this challenge, you'll build a HTTP/1.1 server
+protocol that powers the web. In this challenge, I built a HTTP/1.1 server
 that is capable of serving multiple clients.
 
-Along the way you'll learn about TCP servers,
+Along the way I learned about TCP servers,
 [HTTP request syntax](https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html),
 and more.
 
+---
+
+Endpoints developed:
+
+- `/` - Responds with a simple 200 HTTP code
+- `/echo/...` - Responds with a simple text echo of anything after the `/echo/`
+- `/user-agent` - Responds with a simple text of the user agent that sent the `GET` request
+- `GET /files/...` - Responds with the contents of the file specified if it exists, otherwise a 404 error
+- `POST /files/...` - Responds with a 201 Created HTTP code after saving the contents of the request body to the specified file
+
+---
+
 **Note**: If you're viewing this repo on GitHub, head over to
 [codecrafters.io](https://codecrafters.io) to try the challenge.
-
-# Passing the first stage
-
-The entry point for your HTTP server implementation is in `app/server.go`. Study
-and uncomment the relevant code, and push your changes to pass the first stage:
-
-```sh
-git add .
-git commit -m "pass 1st stage" # any msg
-git push origin master
-```
-
-Time to move on to the next stage!
-
-# Stage 2 & beyond
-
-Note: This section is for stages 2 and beyond.
 
 1. Ensure you have `go (1.19)` installed locally
 1. Run `./your_server.sh` to run your program, which is implemented in
