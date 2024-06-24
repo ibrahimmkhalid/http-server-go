@@ -74,10 +74,13 @@ func handleEchoPath(request http.Request) string {
 	var data string = strings.TrimPrefix(request.URL.Path, "/echo/")
 	var size int = len(data)
 
-	encoding := request.Header.Get("Accept-Encoding")
-	if encoding != "" {
-		if strings.Contains(ENCODINGS, encoding) {
-			return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", encoding, size, data)
+	encodingsString := request.Header.Get("Accept-Encoding")
+	if encodingsString != "" {
+		encodings := strings.Split(encodingsString, ",")
+		for _, v := range encodings {
+			if strings.Contains(ENCODINGS, strings.Trim(v, " ")) {
+				return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", v, size, data)
+			}
 		}
 	}
 
