@@ -14,6 +14,7 @@ const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
 const RESPONSE_201 string = "HTTP/1.1 201 Created\r\n\r\n"
 const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
 const RESPONSE_500 string = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
+const ENCODINGS string = "gzip"
 
 var filesPath string
 
@@ -58,7 +59,7 @@ func router(conn net.Conn) {
 	if req.URL.Path == "/" {
 		conn.Write([]byte(RESPONSE_200))
 	} else if strings.HasPrefix(req.URL.Path, "/echo/") {
-		conn.Write([]byte(handleEchoPath(req.URL.Path)))
+		conn.Write([]byte(handleEchoPath(*req)))
 	} else if req.URL.Path == "/user-agent" {
 		conn.Write([]byte(handleUserAgentPath(*req)))
 	} else if strings.HasPrefix(req.URL.Path, "/files/") {
@@ -69,9 +70,16 @@ func router(conn net.Conn) {
 
 }
 
-func handleEchoPath(urlPath string) string {
-	var data string = strings.TrimPrefix(urlPath, "/echo/")
+func handleEchoPath(request http.Request) string {
+	var data string = strings.TrimPrefix(request.URL.Path, "/echo/")
 	var size int = len(data)
+
+	encoding := request.Header.Get("Accept-Encoding")
+	if encoding != "" {
+		if strings.Contains(ENCODINGS, encoding) {
+			return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", encoding, size, data)
+		}
+	}
 
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
 }
