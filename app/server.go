@@ -20,9 +20,8 @@ var portNumber int
 
 func main() {
 	flag.StringVar(&filesPath, "directory", "", "Path to /files/ serve endpoint")
-	flag.Parse()
-
 	flag.IntVar(&portNumber, "port", 4221, "Port to bind to")
+	flag.Parse()
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", portNumber))
 	if err != nil {
