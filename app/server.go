@@ -94,20 +94,19 @@ func returnResponse(req http.Request, res http.Response, conn net.Conn) {
 }
 
 func handleResponseEncoding(res http.Response, encodingsString string) (http.Response, error) {
-	var data string
-	var chunk []byte = make([]byte, 1024)
-	for {
-		n, err := res.Body.Read(chunk)
-		if err != nil {
-			break
-		}
-		data += string(chunk[:n])
-	}
-
 	encodings := strings.Split(encodingsString, ",")
 	for _, v := range encodings {
 		encoding := strings.Trim(v, " ")
 		if strings.Contains(ENCODINGS, encoding) {
+			var data string
+			var chunk []byte = make([]byte, 1024)
+			for {
+				n, err := res.Body.Read(chunk)
+				if err != nil {
+					break
+				}
+				data += string(chunk[:n])
+			}
 			compressedData, err := compressData([]byte(data), encoding)
 			if err != nil {
 				return res, err
