@@ -20,6 +20,7 @@ const RESPONSE_500 string = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
 const ENCODINGS string = "gzip"
 
 var filesPath string
+var portNumber int
 
 func main() {
 	fmt.Println("Server started...")
@@ -27,9 +28,11 @@ func main() {
 	flag.StringVar(&filesPath, "directory", "", "Path to /files/ serve endpoint")
 	flag.Parse()
 
-	l, err := net.Listen("tcp", "0.0.0.0:4221")
+	flag.IntVar(&portNumber, "port", 4221, "Port to bind to")
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", portNumber))
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		fmt.Println(fmt.Sprintf("Failed to bind to port %v", portNumber))
 		os.Exit(1)
 	}
 
