@@ -114,6 +114,7 @@ func handleResponseEncoding(res http.Response, encodingsString string) (http.Res
 			}
 			res.Body = io.NopCloser(bytes.NewBuffer(compressedData))
 			res.ContentLength = int64(len(compressedData))
+			res.Header.Add("content-encoding", encoding)
 		}
 	}
 	return res, nil
