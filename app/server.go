@@ -6,41 +6,32 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
-	"math/rand"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 )
 
-const RESPONSE_200 string = "HTTP/1.1 200 OK\r\n\r\n"
-const RESPONSE_201 string = "HTTP/1.1 201 Created\r\n\r\n"
-const RESPONSE_404 string = "HTTP/1.1 404 Not Found\r\n\r\n"
-const RESPONSE_500 string = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
 const ENCODINGS string = "gzip"
 
 var filesPath string
+var portNumber int
 
 func main() {
-	fmt.Println("Server started...")
-
 	flag.StringVar(&filesPath, "directory", "", "Path to /files/ serve endpoint")
 	flag.Parse()
 
-	l, err := net.Listen("tcp", "0.0.0.0:4221")
+	flag.IntVar(&portNumber, "port", 4221, "Port to bind to")
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", portNumber))
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		fmt.Println(fmt.Sprintf("Failed to bind to port %v", portNumber))
 		os.Exit(1)
 	}
 
 	defer l.Close()
 
-	tmp, _ := os.Create("run")
-	tmp.WriteString(fmt.Sprintf("%d", rand.Intn(100)))
-	tmp.Sync()
-	tmp.Close()
-
-	fmt.Println("Connection accepted")
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -69,65 +60,110 @@ func router(conn net.Conn) {
 	}
 
 	if req.URL.Path == "/" {
-		conn.Write([]byte(RESPONSE_200))
+		var res http.Response
+		res.StatusCode = 200
+		returnResponse(*req, res, conn)
 	} else if strings.HasPrefix(req.URL.Path, "/echo/") {
-		conn.Write([]byte(handleEchoPath(*req)))
+		handleEchoPath(*req, conn)
 	} else if req.URL.Path == "/user-agent" {
-		conn.Write([]byte(handleUserAgentPath(*req)))
+		handleUserAgentPath(*req, conn)
 	} else if strings.HasPrefix(req.URL.Path, "/files/") {
-		conn.Write([]byte(handleFilesEndpoint(*req)))
+		handleFilesEndpoint(*req, conn)
 	} else {
-		conn.Write([]byte(RESPONSE_404))
+		return404(conn)
 	}
 
 }
 
-func handleEchoPath(request http.Request) string {
-	var data string = strings.TrimPrefix(request.URL.Path, "/echo/")
-	var size int = len(data)
-
-	encodingsString := request.Header.Get("Accept-Encoding")
+func returnResponse(req http.Request, res http.Response, conn net.Conn) {
+	encodingsString := req.Header.Get("Accept-Encoding")
 	if encodingsString != "" {
-		encodings := strings.Split(encodingsString, ",")
-		for _, v := range encodings {
-			encoding := strings.Trim(v, " ")
-			if strings.Contains(ENCODINGS, encoding) {
-				compressedData, err := compressData([]byte(data), encoding)
-				if err != nil {
-					fmt.Println(err.Error())
-					return RESPONSE_500
-				}
-				size = len(compressedData)
-				return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", encoding, size, compressedData)
-			}
+		var err error
+		res, err = handleResponseEncoding(res, encodingsString)
+		if err != nil {
+			fmt.Println(err.Error())
+			return500(conn)
 		}
 	}
 
-	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
+	res.ProtoMajor = 1
+	res.ProtoMinor = 1
+	var buf bytes.Buffer
+	res.Write(&buf)
+	conn.Write(buf.Bytes())
 }
 
-func handleUserAgentPath(request http.Request) string {
+func handleResponseEncoding(res http.Response, encodingsString string) (http.Response, error) {
+	encodings := strings.Split(encodingsString, ",")
+	for _, v := range encodings {
+		encoding := strings.Trim(v, " ")
+		if strings.Contains(ENCODINGS, encoding) {
+			var data string
+			var chunk []byte = make([]byte, 1024)
+			for {
+				n, err := res.Body.Read(chunk)
+				if err != nil {
+					break
+				}
+				data += string(chunk[:n])
+			}
+			compressedData, err := compressData([]byte(data), encoding)
+			if err != nil {
+				return res, err
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(compressedData))
+			res.ContentLength = int64(len(compressedData))
+			res.Header.Add("content-encoding", encoding)
+		}
+	}
+	return res, nil
+}
+
+func handleEchoPath(request http.Request, conn net.Conn) {
+	var data string = strings.TrimPrefix(request.URL.Path, "/echo/")
+	var size int = len(data)
+
+	var res http.Response
+	res.StatusCode = 200
+	res.Body = io.NopCloser(bytes.NewBufferString(data))
+	res.ContentLength = int64(size)
+	res.Header = make(http.Header)
+	res.Header.Add("content-type", "text/plain")
+
+	returnResponse(request, res, conn)
+}
+
+func handleUserAgentPath(request http.Request, conn net.Conn) {
 	var data string = request.UserAgent()
 	var size int = len(data)
-	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s", size, data)
+
+	var res http.Response
+	res.StatusCode = 200
+	res.Body = io.NopCloser(bytes.NewBufferString(data))
+	res.ContentLength = int64(size)
+	res.Header = make(http.Header)
+	res.Header.Add("content-type", "text/plain")
+
+	returnResponse(request, res, conn)
 }
 
-func handleFilesEndpoint(request http.Request) string {
+func handleFilesEndpoint(request http.Request, conn net.Conn) {
 	if filesPath == "" {
 		fmt.Println("Root for /files/ endpoint not defined")
+		return500(conn)
 		os.Exit(1)
 	}
 
 	if request.Method == "POST" {
-		return handleFileUploadEndpoint(request)
+		handleFileUploadEndpoint(request, conn)
 	} else if request.Method == "GET" {
-		return handleFileServeEndpoint(request.URL.Path)
+		handleFileServeEndpoint(request, conn)
 	} else {
-		return RESPONSE_404
+		return404(conn)
 	}
 }
 
-func handleFileUploadEndpoint(request http.Request) string {
+func handleFileUploadEndpoint(request http.Request, conn net.Conn) {
 	body := request.Body
 	var chunk []byte = make([]byte, 1024)
 
@@ -150,26 +186,28 @@ func handleFileUploadEndpoint(request http.Request) string {
 	fd, err := os.Create(filePath)
 	if err != nil {
 		fmt.Println(err.Error())
-		return RESPONSE_500
+		return500(conn)
 	}
 	defer fd.Close()
 
 	_, err = fd.Write([]byte(data))
 	if err != nil {
 		fmt.Println(err.Error())
-		return RESPONSE_500
+		return500(conn)
 	}
 
 	fd.Sync()
-	return RESPONSE_201
+	var res http.Response
+	res.StatusCode = 201
+	returnResponse(request, res, conn)
 }
 
-func handleFileServeEndpoint(urlPath string) string {
-	var filename string = strings.TrimPrefix(urlPath, "/files/")
+func handleFileServeEndpoint(request http.Request, conn net.Conn) {
+	var filename string = strings.TrimPrefix(request.URL.Path, "/files/")
 	var filePath string = filesPath + filename
 	fd, err := os.Open(filePath)
 	if err != nil {
-		return RESPONSE_404
+		return404(conn)
 	}
 	defer fd.Close()
 
@@ -187,7 +225,13 @@ func handleFileServeEndpoint(urlPath string) string {
 		data += string(chunk[:n])
 	}
 
-	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%s", size, data)
+	var res http.Response
+	res.StatusCode = 200
+	res.Body = io.NopCloser(bytes.NewBufferString(data))
+	res.ContentLength = int64(size)
+	res.Header = make(http.Header)
+	res.Header.Add("content-type", "application/octet-stream")
+	returnResponse(request, res, conn)
 }
 
 func compressData(data []byte, algorithm string) ([]byte, error) {
@@ -200,8 +244,21 @@ func compressData(data []byte, algorithm string) ([]byte, error) {
 		if err := gz.Close(); err != nil {
 			return data, err
 		}
-		fmt.Println(b.Bytes())
 		return b.Bytes(), nil
 	}
 	return data, nil
+}
+
+func return404(conn net.Conn) {
+	var res http.Response
+	res.StatusCode = 404
+	req := http.Request{}
+	returnResponse(req, res, conn)
+}
+
+func return500(conn net.Conn) {
+	var res http.Response
+	res.StatusCode = 500
+	req := http.Request{}
+	returnResponse(req, res, conn)
 }
