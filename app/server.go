@@ -2,8 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +22,7 @@ const ENCODINGS string = "gzip"
 var filesPath string
 
 func main() {
+	fmt.Println("Server started...")
 
 	flag.StringVar(&filesPath, "directory", "", "Path to /files/ serve endpoint")
 	flag.Parse()
@@ -30,12 +34,20 @@ func main() {
 	}
 
 	defer l.Close()
+
+	tmp, _ := os.Create("run")
+	tmp.WriteString(fmt.Sprintf("%d", rand.Intn(100)))
+	tmp.Sync()
+	tmp.Close()
+
+	fmt.Println("Connection accepted")
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
+
 		go router(conn)
 	}
 }
@@ -78,8 +90,15 @@ func handleEchoPath(request http.Request) string {
 	if encodingsString != "" {
 		encodings := strings.Split(encodingsString, ",")
 		for _, v := range encodings {
-			if strings.Contains(ENCODINGS, strings.Trim(v, " ")) {
-				return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", v, size, data)
+			encoding := strings.Trim(v, " ")
+			if strings.Contains(ENCODINGS, encoding) {
+				compressedData, err := compressData([]byte(data), encoding)
+				if err != nil {
+					fmt.Println(err.Error())
+					return RESPONSE_500
+				}
+				size = len(compressedData)
+				return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: %s\r\nContent-Length: %v\r\n\r\n%s", encoding, size, compressedData)
 			}
 		}
 	}
@@ -169,4 +188,20 @@ func handleFileServeEndpoint(urlPath string) string {
 	}
 
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%s", size, data)
+}
+
+func compressData(data []byte, algorithm string) ([]byte, error) {
+	if algorithm == "gzip" {
+		var b bytes.Buffer
+		gz := gzip.NewWriter(&b)
+		if _, err := gz.Write(data); err != nil {
+			return data, err
+		}
+		if err := gz.Close(); err != nil {
+			return data, err
+		}
+		fmt.Println(b.Bytes())
+		return b.Bytes(), nil
+	}
+	return data, nil
 }
